@@ -99,7 +99,7 @@ login, `/mcp` should show `github-huit` as connected (the wrapper reads the
 token from `gh`). If it shows failed, run the wrapper by hand to see its
 stderr, then fix what it reports. Get the install path from
 `claude plugin list --json` (the `installPath` field; typically
-`~/.claude/plugins/cache/huit-plugins/huit-github/<version>`), then:
+`~/.claude/plugins/cache/huit-claude-plugins/huit-github/<version>`), then:
 
 ```sh
 "<installPath>"/bin/github-mcp-ghes.sh </dev/null

@@ -18,8 +18,8 @@ make sure `gh` is logged in there (`gh auth login --hostname github.com --web`).
 Then two commands inside Claude Code:
 
 ```
-/plugin marketplace add harvard-huit/huit-github-plugin
-/plugin install huit-github@huit-plugins
+/plugin marketplace add harvard-huit/huit-claude-plugins
+/plugin install huit-github@huit-claude-plugins
 ```
 
 Then run the setup skill and follow along:

@@ -6,7 +6,7 @@
   "author": {
     "name": "AAIS, Harvard University IT"
   },
-  "repository": "https://github.com/harvard-huit/huit-github-plugin",
+  "repository": "https://github.com/harvard-huit/huit-claude-plugins",
   "license": "MIT",
   "keywords": ["github", "mcp", "harvard", "huit", "ghes"]
 }

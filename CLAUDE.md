@@ -1,9 +1,10 @@
-# huit-github-plugin
+# huit-claude-plugins
 
-A Claude Code plugin that gives people in the AAIS group / HUIT org a working
-GitHub integration **without creating or storing a Personal Access Token**.
-Distributed as a self-hosting plugin marketplace (one git repo, one plugin) so
-onboarding is two slash commands.
+A self-hosting Claude Code plugin marketplace for the AAIS group / HUIT org.
+Repo: `harvard-huit/huit-claude-plugins` (github.com, Internal). Marketplace
+name: `huit-claude-plugins`. Today it holds one plugin, `huit-github`, which
+gives people a working GitHub integration **without creating or storing a
+Personal Access Token**. Onboarding is two slash commands.
 
 Status (2026-09-19): every file in the layout below exists, validates, and
 installs locally. Nothing is committed or published yet, and the GHES path is
@@ -37,8 +38,10 @@ references do not auto-link.
 
 1. **One repo is both the plugin and the marketplace.** `.claude-plugin/marketplace.json`
    lists a single plugin with `"source": "./"`. Users run
-   `/plugin marketplace add <git url>` then `/plugin install huit-github@huit-plugins`.
-   Marketplace name is provisional.
+   `/plugin marketplace add harvard-huit/huit-claude-plugins` then
+   `/plugin install huit-github@huit-claude-plugins`. Renamed 2026-09-19 from
+   `huit-plugins` so the marketplace can grow beyond GitHub. When a second plugin
+   arrives, move this one to `plugins/huit-github/` and point `source` there.
 2. **github.com path is the remote GitHub MCP server over HTTP with OAuth.**
    Declared in plugin-root `.mcp.json` as `{"type": "http", "url": "https://api.githubcopilot.com/mcp/"}`.
    User authenticates once via `/mcp`. Because `harvard-huit` enforces SAML, an
@@ -72,10 +75,10 @@ references do not auto-link.
 ## Planned layout
 
 ```
-huit-github-plugin/
+huit-claude-plugins/
 ├── .claude-plugin/
 │   ├── plugin.json           # name, version, description, author, repository
-│   └── marketplace.json      # name: huit-plugins, plugins: [{name: huit-github, source: "./"}]
+│   └── marketplace.json      # name: huit-claude-plugins, plugins: [{name: huit-github, source: "./"}]
 ├── .mcp.json                 # github (remote http, OAuth) + github-huit (wrapper script)
 ├── bin/
 │   └── github-mcp-ghes.sh    # GITHUB_HOST + gh auth token -> github-mcp-server stdio
@@ -110,7 +113,7 @@ invocation name; keep it stable.
       documented says so, but confirm with a non-Copilot account.
 - [ ] **Who authorizes the OAuth app for `harvard-huit` SAML?** Identify the org owner.
 - [x] **Where does the marketplace repo live?** github.com
-      `harvard-huit/huit-github-plugin`, visibility Internal (visible to the
+      `harvard-huit/huit-claude-plugins`, visibility Internal (visible to the
       enterprise, not public). Installing requires a github.com login that is
       SSO-authorized for `harvard-huit`, so `gh auth login --hostname github.com`
       comes before `/plugin marketplace add`.
@@ -126,9 +129,9 @@ invocation name; keep it stable.
   `claude plugin validate .`, `claude plugin validate .claude-plugin/plugin.json`,
   `claude plugin validate skills`. `--strict` warns that a root `CLAUDE.md` is not
   loaded as plugin context; that is expected, it is for developers of this repo.
-- Test locally with `/plugin marketplace add ~/workshop/huit-github-plugin` then
-  `/plugin install huit-github@huit-plugins` (or the same via `claude plugin ...`
-  on the CLI). Installs copy to `~/.claude/plugins/cache/huit-plugins/huit-github/<version>/`;
+- Test locally with `/plugin marketplace add ~/workshop/huit-claude-plugins` then
+  `/plugin install huit-github@huit-claude-plugins` (or the same via `claude plugin ...`
+  on the CLI). Installs copy to `~/.claude/plugins/cache/huit-claude-plugins/huit-github/<version>/`;
   `claude plugin list --json` shows `installPath`. Uninstall and reinstall after
   changing `.mcp.json` or hooks; those are read at install time. A local-path
   install copies gitignored files too, so nothing sensitive may sit in this tree.
@@ -140,10 +143,8 @@ invocation name; keep it stable.
 - Memory routing: durable, portable, project-scoped facts go in
   `.claude/memory/` here (this repo is git-tracked). Machine-specific facts stay
   in `~/.claude` memory.
-- Related, unrelated to this repo: `~/workshop/claude-plugins/` is an empty shell
-  created the same morning. If this grows into several plugins, that is the
-  natural home for a multi-plugin marketplace; this repo would become
-  `plugins/huit-github/` under it.
+- `~/workshop/claude-plugins/` is an empty shell created the same morning, now
+  superseded by this repo (which is the multi-plugin marketplace). Safe to delete.
 
 ## References
 
