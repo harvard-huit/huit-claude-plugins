@@ -1,0 +1,12 @@
+{
+  "name": "huit-aws",
+  "displayName": "HUIT AWS",
+  "version": "0.1.0",
+  "description": "Log into HUIT AWS accounts from Claude Code. Wraps the HUIT aws-login SAML CLI (HarvardKey + Okta Verify push, all mapped profiles at once) and the native aws login console-session attach (one role, credentials refreshed every 15 minutes). No IAM Identity Center, no long-lived keys.",
+  "author": {
+    "name": "AAIS, Harvard University IT"
+  },
+  "repository": "https://github.com/harvard-huit/huit-claude-plugins",
+  "license": "MIT",
+  "keywords": ["aws", "saml", "okta", "harvard", "huit"]
+}

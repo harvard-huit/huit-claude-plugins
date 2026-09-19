@@ -2,13 +2,15 @@
 
 A self-hosting Claude Code plugin marketplace for the AAIS group / HUIT org.
 Repo: `harvard-huit/huit-claude-plugins` (github.com, Internal). Marketplace
-name: `huit-claude-plugins`. Today it holds one plugin, `huit-github`, which
-gives people a working GitHub integration **without creating or storing a
-Personal Access Token**. Onboarding is two slash commands.
+name: `huit-claude-plugins`. It holds two plugins: `huit-github`, which gives
+people a working GitHub integration **without creating or storing a Personal
+Access Token**, and `huit-aws`, which logs people into HUIT AWS accounts via
+HarvardKey (see "huit-aws plugin" below). Onboarding is two slash commands per
+plugin.
 
-Status (2026-09-19): every file in the layout below exists, validates, and
-installs locally. Nothing is committed or published yet, and the GHES path is
-untested against the real host (see open questions).
+Status (2026-09-19): restructured to `plugins/<name>/`, both plugins validate
+and install locally. The GHES path is verified end to end. Nothing is committed
+or published yet.
 
 @.claude/memory/INDEX.md
 
@@ -36,12 +38,13 @@ references do not auto-link.
 
 ## Design decisions (made 2026-09-19)
 
-1. **One repo is both the plugin and the marketplace.** `.claude-plugin/marketplace.json`
-   lists a single plugin with `"source": "./"`. Users run
+1. **One repo is both the plugins and the marketplace.** `.claude-plugin/marketplace.json`
+   at the root lists each plugin with `"source": "./plugins/<name>"`. Users run
    `/plugin marketplace add harvard-huit/huit-claude-plugins` then
-   `/plugin install huit-github@huit-claude-plugins`. Renamed 2026-09-19 from
-   `huit-plugins` so the marketplace can grow beyond GitHub. When a second plugin
-   arrives, move this one to `plugins/huit-github/` and point `source` there.
+   `/plugin install <name>@huit-claude-plugins`. Renamed 2026-09-19 from
+   `huit-plugins` so the marketplace can grow beyond GitHub; the same day
+   `huit-github` moved from the repo root to `plugins/huit-github/` (version
+   0.1.0 to 0.2.0) when `huit-aws` was added.
 2. **github.com path is the remote GitHub MCP server over HTTP with OAuth.**
    Declared in plugin-root `.mcp.json` as `{"type": "http", "url": "https://api.githubcopilot.com/mcp/"}`.
    User authenticates once via `/mcp`. Because `harvard-huit` enforces SAML, an
@@ -72,43 +75,45 @@ references do not auto-link.
    prefer MCP tools when the server is connected and fall back to `gh` otherwise,
    so the plugin still works for someone who only did the `gh` login.
 
-## Planned layout
+## Layout
 
 ```
 huit-claude-plugins/
 ├── .claude-plugin/
-│   ├── plugin.json           # name, version, description, author, repository
-│   └── marketplace.json      # name: huit-claude-plugins, plugins: [{name: huit-github, source: "./"}]
-├── .mcp.json                 # github (remote http, OAuth) + github-huit (wrapper script)
-├── bin/
-│   └── github-mcp-ghes.sh    # GITHUB_HOST + gh auth token -> github-mcp-server stdio
-├── hooks/
-│   ├── hooks.json            # SessionStart -> scripts/check-gh-auth.sh
-├── scripts/
-│   └── check-gh-auth.sh
-├── skills/
-│   └── github-setup/
-│       └── SKILL.md          # install gh / MCP binary, device-flow login per host, /mcp, allowlist
-├── README.md                 # user-facing: two commands to install, what to expect
+│   └── marketplace.json      # name: huit-claude-plugins, plugins: huit-github, huit-aws
+├── plugins/
+│   ├── huit-github/
+│   │   ├── .claude-plugin/plugin.json   # name, version, description, author, repository
+│   │   ├── .mcp.json                    # github (remote http, OAuth) + github-huit (wrapper script)
+│   │   ├── bin/github-mcp-ghes.sh       # GITHUB_HOST + gh auth token -> github-mcp-server stdio
+│   │   ├── hooks/hooks.json             # SessionStart -> scripts/check-gh-auth.sh
+│   │   ├── scripts/check-gh-auth.sh
+│   │   └── skills/github-setup/SKILL.md # install gh / MCP binary, device-flow login per host, /mcp, allowlist
+│   └── huit-aws/
+│       ├── .claude-plugin/plugin.json
+│       └── skills/aws-login/SKILL.md    # aws-login login_all or aws login attach; see design below
+├── README.md                 # user-facing: install, updates, one section per plugin
 ├── CLAUDE.md                 # this file
 └── .claude/memory/INDEX.md   # committed project memory (portable across machines)
 ```
 
-Only `plugin.json` lives inside `.claude-plugin/`. Everything else is at plugin
-root. Use `"${CLAUDE_PLUGIN_ROOT}"/bin/... ` (quoted) in hook commands and
-`.mcp.json` so paths resolve after install. Skill `name` in frontmatter is the
-invocation name; keep it stable.
+Inside each plugin, only `plugin.json` lives in `.claude-plugin/`; everything
+else is at that plugin's root. Use `"${CLAUDE_PLUGIN_ROOT}"/bin/... ` (quoted)
+in hook commands and `.mcp.json` so paths resolve after install. Skill `name`
+in frontmatter is the invocation name (`/<plugin>:<skill>`); keep it stable.
 
 ## Open questions to settle first
 
-- [ ] **Does `gh auth login --hostname github.huit.harvard.edu --web` work?**
-      Known gotcha: `gh` with a classic PAT fails there with 401 because it sends
-      `Authorization: Bearer` and that GHES rejects it for classic PATs. An OAuth
-      token from device-flow login may behave differently. Test this before
-      promising GHES support. If it fails, the GHES fallback is a curl-based skill
-      using `Authorization: token`.
-- [ ] **Does the local `github-mcp-server` work against that GHES with the `gh` token?**
-      Same Bearer question applies to the binary.
+- [x] **Does `gh auth login --hostname github.huit.harvard.edu --web` work?**
+      Yes (verified 2026-09-19, gh 2.96.0): `gh api --hostname
+      github.huit.harvard.edu user` returns the login, and `GH_HOST=... gh
+      release download` works. The `Authorization: Bearer` 401 applies only to
+      classic PATs, not to OAuth tokens from device-flow login. GHES shows
+      3.19 in its API docs URL now, not 3.17.
+- [x] **Does the local `github-mcp-server` work against that GHES with the `gh` token?**
+      Yes (verified 2026-09-19, binary 1.12.2): the wrapper started with
+      `host=https://github.huit.harvard.edu`, and `get_me` plus
+      `search_repositories` succeeded over stdio using the `gh` OAuth token.
 - [ ] **Does the remote server need a Copilot license or org policy?** Nothing
       documented says so, but confirm with a non-Copilot account.
 - [ ] **Who authorizes the OAuth app for `harvard-huit` SAML?** Identify the org owner.
@@ -122,21 +127,163 @@ invocation name; keep it stable.
       client ID passed via `GITHUB_OAUTH_CLIENT_ID`; the baked-in app is github.com
       only. That is an admin ask we do not need, so the wrapper keeps using `gh`.
 
+## huit-aws plugin
+
+Log into HUIT AWS accounts from Claude Code. Wraps two tools rather than
+replacing either: the HUIT `aws-login` binary (SAML via HarvardKey + Okta Verify
+push; canonical repo `HUIT/aws-login-saml-cli` on GHES, github.com mirror
+`harvard-huit/aws-login-saml-cli`) and the native `aws login` command (AWS CLI
+2.32.0+). Skill first, hook second. The skill lives at
+`plugins/huit-aws/skills/aws-login/SKILL.md` and is invoked as
+`/huit-aws:aws-login <account>`. It was drafted as a personal skill on
+2026-09-19 and moved here the same day; the personal copy was deleted so there
+is one source of truth.
+
+### Facts established 2026-09-19 (do not re-derive)
+
+- **`aws sso login` does not apply.** HUIT federates SAML straight to IAM roles
+  (`*-standard-saml-poweruser-iam-role`); there is no IAM Identity Center.
+- **IAM SAML federation is IdP-initiated only.** AWS's sign-in page cannot
+  redirect to Okta, so `aws login`'s "sign in to new session" button lands on the
+  IAM-user page and is a dead end for us. There is no config key that accepts an
+  IdP URL. `login_session` is an identity ARN
+  (`arn:aws:sts::<acct>:assumed-role/<role>@<region>/<user>`), not a location.
+- **The working `aws login` flow is: console session first, then attach.** Open
+  the Okta embed link, finish HarvardKey and pick the role, then run
+  `aws login --profile <alias>` and select the existing session in the browser.
+  Confirmed working for one role; the role therefore already carries the
+  `SignInLocalDevelopmentAccess` policy that `aws login` requires.
+- **Okta embed link is per-app, not per-user**, so one URL serves everyone in
+  HUIT with the AWS console app:
+  `https://login.harvard.edu/home/harvard_awsconsole_1/0oa1u9wgsl3Ca8aIO1d8/aln1u9wlto0AtKDqe1d8`.
+  Keep it as one named constant in the skill.
+- **Trade-off between the two tools.** `aws-login login_all` gets every mapped
+  profile from a single Okta push (best for multi-account). `aws login` needs
+  one console login per role but refreshes credentials every 15 minutes for the
+  life of the console session, bounded by the role's max session duration (best
+  for a long single-role session). Console multi-session allows up to five role
+  sessions in one browser, so several `aws login --profile` attachments are
+  possible without logging out.
+- **Both tools block on out-of-band action** (push approval or browser click).
+  The skill must say so and not treat a long-running command as a hang.
+- **`aws-login` surface (v2.0.x).** Subcommands: `login [alias]`, `login_all`,
+  `list`, `list-role-map`, `switch <alias>`, `assume <alias>`,
+  `configure_keyring`. Flags: `-version`, `-show-config` (prints the loaded
+  config as JSON, creates an empty config file if none), `-h`, `-v`, `-t`,
+  `-keyring=false`, `-d` (prints credentials, never use). **Bare `aws-login` is
+  `login`**, which prompts for a password and a role picker. Config path is
+  `~/Library/Application Support/huit_aws/config.json` on macOS and
+  `~/.config/huit_aws/config.json` on Linux. Releases: 2.0.3 (2025-06, what is
+  installed here), 2.0.4 (2026-05-19, latest stable), 2.1.0-beta1 (2026-06,
+  adds browser `-passkey` login; prerelease). Local checkout at
+  `~/workshop/aws-login-saml-cli` is at the 2025-06-09 commit.
+- **Interactive prompts cannot be answered from Claude's Bash tool.** The
+  `Enter Password:` prompt (no keyring), `login` without an alias (role picker),
+  and `aws login --remote` (paste a code) all need the person's own terminal.
+  With `configure_keyring` done, `login_all` needs only the push approval and
+  runs fine from Claude.
+- **Credential precedence gotcha (verified in bundled botocore, awscli 2.36.49).**
+  Profile providers run in this order: web-identity, sso, shared-credentials-file,
+  login, custom-process, config-file. So a `[<alias>]` stanza that `aws-login`
+  wrote in `~/.aws/credentials` beats `login_session` for the same profile name in
+  `~/.aws/config`, and once those static keys expire the profile fails with
+  `ExpiredToken` even though the `aws login` session is healthy.
+- **`aws login` auto-refresh confirmed 2026-09-19.** With
+  `AWS_SHARED_CREDENTIALS_FILE=/dev/null` the `default` profile (where the test
+  `login_session` landed, because `aws login` was run without `--profile`)
+  resolved via the login provider and the cache expiry advanced by 15 minutes.
+- **`gh release download` from GHES works** now that `gh` holds a GHES OAuth
+  login, so the skill can offer the `aws-login` install without curl or a PAT.
+
+### Skill design (`skills/aws-login/SKILL.md`)
+
+- Two branches, chosen by the request:
+  - "log into all my AWS profiles" or no alias given: `aws-login login_all`.
+  - a named alias, or an `ExpiredToken` / `InvalidClientTokenId` error on an
+    `aws` command: `open <okta-url>` (Mac) or print the URL (Linux), tell the
+    user to finish the browser login, then on their go-ahead run
+    `aws login --profile <alias>`. On a host without a browser (Cloud9) use
+    `aws login --remote`.
+- Always finish with `aws sts get-caller-identity --profile <alias>`.
+- Read aliases from `aws-login list-role-map`; never hardcode a person's
+  aliases or account IDs in the plugin.
+- Prefer `aws-login switch <alias>` over re-authenticating when credentials for
+  the alias are already cached.
+- **Profile naming convention (decided 2026-09-19 by JaZahn):** `aws-login`
+  aliases in `profile_map` end in `-login` (`admints-dev-login`), and `aws
+  login` sessions use the plain account name (`admints-dev`). This avoids the
+  precedence gotcha above. The skill checks for a static stanza under the plain
+  name before attaching and, if one exists, offers to rename the aliases in the
+  config rather than attaching under a colliding name.
+- `aws-login` on macOS reads only `~/Library/Application Support/huit_aws/config.json`.
+  `~/.huit_aws/config` (1.x) and `~/.config/huit_aws/config.json` may linger
+  from older installs and are ignored there; the skill says so. The timeout
+  key is `default_timeout_secs`; `default_timeout_sec` is silently ignored.
+- The skill never edits `~/.aws/config` or `~/.aws/credentials` and never reads
+  the credentials file or `~/.aws/login/cache/`; validity is checked with STS.
+
+### To do
+
+- [x] Draft the skill (2026-09-19), move `huit-github` to `plugins/huit-github/`
+      and add `plugins/huit-aws/` (same day; `huit-github` bumped to 0.2.0).
+- [ ] Use the skill against real logins for a while before publishing. Still
+      unverified: whether `aws login --profile <new-name>` creates a
+      `[profile ...]` stanza in `~/.aws/config` for a name that does not exist
+      yet, and whether it writes `region`.
+- [ ] Next `aws-login login_all` should write `*-login` stanzas only; confirm
+      no plain-name stanza reappears in `~/.aws/credentials`.
+- [ ] Test the single-alias branch on Cloud9: no `open`, must fall back to the
+      printed URL and `aws login --remote`.
+- [ ] Confirm `SignInLocalDevelopmentAccess` is on every standard SAML role, not
+      just the one tested. If not, that is a HUIT cloud team ask; document who.
+- [ ] Decide whether the credential check is a `SessionStart` nudge (matches
+      `huit-github`) or a `PreToolUse` hook on `Bash` commands starting with
+      `aws ` that fails fast with "run /aws-login" when credentials are expired.
+      The PreToolUse form saves a wasted turn but is the first blocking hook in
+      the marketplace; keep it silent when credentials are valid either way.
+- [ ] Test the install story drafted in the skill on a clean machine:
+      `GH_HOST=github.huit.harvard.edu gh release download -R HUIT/aws-login-saml-cli`
+      with the `{Darwin,Linux}-{arm64,x86_64}` asset pattern, Gatekeeper
+      `xattr` step, `~/bin` on PATH, then config.json from `aws-login list`.
+- [x] Probe for installed vs configured: `aws-login -version` and
+      `aws-login -show-config` (empty `profile_map` means not configured).
+
 ## Conventions
 
-- Validate before every commit. `claude plugin validate .` only checks the
-  marketplace manifest when both manifests exist, so run all three:
-  `claude plugin validate .`, `claude plugin validate .claude-plugin/plugin.json`,
-  `claude plugin validate skills`. `--strict` warns that a root `CLAUDE.md` is not
-  loaded as plugin context; that is expected, it is for developers of this repo.
+- Validate before every commit. Each `claude plugin validate <dir>` call checks
+  one thing: the marketplace manifest for `.`, a plugin manifest for a plugin
+  dir, and skill frontmatter for a `skills` dir. So run all five:
+  `claude plugin validate .`, `... plugins/huit-github`, `... plugins/huit-aws`,
+  `... plugins/huit-github/skills`, `... plugins/huit-aws/skills`.
 - Test locally with `/plugin marketplace add ~/workshop/huit-claude-plugins` then
-  `/plugin install huit-github@huit-claude-plugins` (or the same via `claude plugin ...`
-  on the CLI). Installs copy to `~/.claude/plugins/cache/huit-claude-plugins/huit-github/<version>/`;
-  `claude plugin list --json` shows `installPath`. Uninstall and reinstall after
-  changing `.mcp.json` or hooks; those are read at install time. A local-path
-  install copies gitignored files too, so nothing sensitive may sit in this tree.
+  `/plugin install <name>@huit-claude-plugins` (or the same via `claude plugin ...`
+  on the CLI). Installs copy to `~/.claude/plugins/cache/huit-claude-plugins/<name>/<version>/`;
+  `claude plugin list --json` shows `installPath`. The cache is a copy, not a
+  link: after editing anything, `claude plugin uninstall` then `install` again
+  (or bump the version). `.mcp.json` and hooks are read at install time; skills
+  at session start. A local-path install copies gitignored files too, so nothing
+  sensitive may sit in this tree.
+- **Bump `version` in the plugin's `plugin.json` on every published change.**
+  That field is the update signal: Claude Code refreshes marketplaces in the
+  background after session start (when auto-update is enabled for the
+  marketplace, which is off by default for non-Anthropic marketplaces) and
+  prompts `/reload-plugins` when a version changed. Without a bump users keep
+  the cached copy. Manual path: `/plugin marketplace update huit-claude-plugins`
+  then `/plugin update <name>@huit-claude-plugins`. Admins can set
+  `autoUpdate: true` on the marketplace entry in managed settings. No custom
+  update-check hook; the built-in mechanism covers it.
 - Scripts must be executable in git (`chmod +x`, and check `git ls-files -s`
   shows mode 100755); the installer preserves modes, it does not add them.
+- Do not put a `.mcp.json` at the repo root. Claude Code reads a root
+  `.mcp.json` as a *project* MCP config whenever this repo is the working
+  directory, and `${CLAUDE_PLUGIN_ROOT}` is not expanded there, so a phantom
+  `github-huit` failed with ENOENT in every session opened here until the
+  plugin moved under `plugins/`.
+- `brew install github-mcp-server` has no bottle on macOS versions Homebrew
+  no longer supports (Tier 3, e.g. macOS 14) and exits without installing.
+  The setup skill's fallback is the release tarball via
+  `gh release download -R github/github-mcp-server` into `~/.local/bin`,
+  checksum-verified. Tested 2026-09-19.
 - Hook and wrapper scripts: `#!/usr/bin/env bash`, `set -euo pipefail`, no
   Mac-only paths (this will run on Linux too). Never print tokens.
 - Never put a token, hostname-specific secret, or a person's login in this repo.

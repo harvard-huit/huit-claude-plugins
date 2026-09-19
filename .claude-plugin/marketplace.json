@@ -7,10 +7,17 @@
   "plugins": [
     {
       "name": "huit-github",
-      "source": "./",
+      "source": "./plugins/huit-github",
       "description": "GitHub integration for AAIS / HUIT without a Personal Access Token (github.com via remote MCP + OAuth, github.huit.harvard.edu via local MCP + gh login).",
       "category": "productivity",
       "tags": ["github", "mcp", "huit"]
+    },
+    {
+      "name": "huit-aws",
+      "source": "./plugins/huit-aws",
+      "description": "Log into HUIT AWS accounts from Claude Code: HarvardKey/Okta SAML via the HUIT aws-login CLI, or a refreshing aws login console-session attach. Skill /huit-aws:aws-login.",
+      "category": "productivity",
+      "tags": ["aws", "saml", "huit"]
     }
   ]
 }

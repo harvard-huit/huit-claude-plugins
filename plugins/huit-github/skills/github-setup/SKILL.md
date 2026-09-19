@@ -51,12 +51,29 @@ Skip if present.
 
 Skip unless they need GHES. The remote github.com server needs no binary.
 
-- macOS or Linuxbrew: `brew install github-mcp-server`
-- Other Linux: download the latest release tarball for their arch from
-  https://github.com/github/github-mcp-server/releases and put the
-  `github-mcp-server` binary somewhere on PATH (for example `~/.local/bin`).
-  Docker is also supported by the upstream project, but the wrapper script in
-  this plugin expects a binary on PATH.
+- Homebrew (macOS or Linuxbrew): `brew install github-mcp-server`. On a macOS
+  version Homebrew no longer supports (Tier 3, for example macOS 14) there is
+  no bottle and the command exits without installing anything. Always check
+  `command -v github-mcp-server` afterwards; if it is missing, use the release
+  binary.
+- Release binary (any OS). Needs the github.com `gh` login from step 4, so do
+  that first if necessary. Assets are named
+  `github-mcp-server_{Darwin,Linux}_{arm64,x86_64}.tar.gz` plus a checksums file:
+
+  ```sh
+  arch=$(uname -m); case "$arch" in aarch64) arch=arm64 ;; esac
+  tmp=$(mktemp -d)
+  gh release download -R github/github-mcp-server -D "$tmp" \
+    -p "github-mcp-server_$(uname -s)_${arch}.tar.gz" -p '*checksums*'
+  (cd "$tmp" && grep -q "$(shasum -a 256 github-mcp-server_*.tar.gz | cut -d' ' -f1)" *checksums* \
+    && echo "checksum OK" && tar -xzf github-mcp-server_*.tar.gz)
+  mkdir -p ~/.local/bin && install -m 755 "$tmp/github-mcp-server" ~/.local/bin/github-mcp-server
+  ~/.local/bin/github-mcp-server --version
+  ```
+
+  Stop if the checksum line does not print. The wrapper already adds
+  `~/.local/bin` to PATH. Docker is also supported by the upstream project,
+  but the wrapper script in this plugin expects a binary on PATH.
 
 ## 4. Log in with `gh` (device flow, no PAT)
 
@@ -78,9 +95,9 @@ Notes to relay when relevant:
   token for the org: `gh auth refresh --hostname github.com` and follow the
   SSO prompt, or visit the org's SSO page in their browser.
 - **GHES:** the classic-PAT `Authorization: Bearer` 401 gotcha does not apply to
-  OAuth tokens from `gh`, but GHES support is still being confirmed. If
-  `gh auth login` against GHES fails, capture the exact error and stop; do not
-  fall back to creating a PAT.
+  OAuth tokens from `gh`; device-flow login, `gh api`, and the local MCP binary
+  all work against GHES with it. If `gh auth login` against GHES fails anyway,
+  capture the exact error and stop; do not fall back to creating a PAT.
 
 Verify each login without network calls: `gh auth token --hostname <host> >/dev/null && echo ok`.
 For a real round-trip: `gh api --hostname <host> user --jq .login`.
