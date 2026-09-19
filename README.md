@@ -13,10 +13,12 @@ It covers both GitHubs we use:
 
 ## Install
 
-Two commands inside Claude Code:
+This repo is internal to the `harvard-huit` enterprise on github.com, so first
+make sure `gh` is logged in there (`gh auth login --hostname github.com --web`).
+Then two commands inside Claude Code:
 
 ```
-/plugin marketplace add <this repo's git URL>
+/plugin marketplace add harvard-huit/huit-github-plugin
 /plugin install huit-github@huit-plugins
 ```
 

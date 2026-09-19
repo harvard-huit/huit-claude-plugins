@@ -109,15 +109,15 @@ invocation name; keep it stable.
 - [ ] **Does the remote server need a Copilot license or org policy?** Nothing
       documented says so, but confirm with a non-Copilot account.
 - [ ] **Who authorizes the OAuth app for `harvard-huit` SAML?** Identify the org owner.
-- [ ] **Where does the marketplace repo live?** GHES `HUIT/…` keeps it internal
-      but requires GHES login before install; github.com `harvard-huit/…` is
-      reachable by more people. Either works with `/plugin marketplace add <url>`.
+- [x] **Where does the marketplace repo live?** github.com
+      `harvard-huit/huit-github-plugin`, visibility Internal (visible to the
+      enterprise, not public). Installing requires a github.com login that is
+      SSO-authorized for `harvard-huit`, so `gh auth login --hostname github.com`
+      comes before `/plugin marketplace add`.
 - [x] **Does the local server's OAuth device-code fallback work for GHES?**
       Only with an OAuth App or GitHub App registered on the GHES instance and its
       client ID passed via `GITHUB_OAUTH_CLIENT_ID`; the baked-in app is github.com
       only. That is an admin ask we do not need, so the wrapper keeps using `gh`.
-- [ ] **Where does this repo live, for `repository` in `plugin.json`?** Currently a
-      placeholder pointing at `harvard-huit/huit-github-plugin`. Fix when decided.
 
 ## Conventions
 
