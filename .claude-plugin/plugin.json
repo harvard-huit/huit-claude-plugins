@@ -1,0 +1,12 @@
+{
+  "name": "huit-github",
+  "displayName": "HUIT GitHub",
+  "version": "0.1.0",
+  "description": "GitHub integration for AAIS / HUIT without a Personal Access Token: remote GitHub MCP server over OAuth for github.com, and the local github-mcp-server binary (authenticated by gh device-flow login) for github.huit.harvard.edu.",
+  "author": {
+    "name": "AAIS, Harvard University IT"
+  },
+  "repository": "https://github.com/harvard-huit/huit-github-plugin",
+  "license": "MIT",
+  "keywords": ["github", "mcp", "harvard", "huit", "ghes"]
+}

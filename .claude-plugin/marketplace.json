@@ -1,0 +1,16 @@
+{
+  "name": "huit-plugins",
+  "description": "Claude Code plugins for the AAIS group at Harvard University IT.",
+  "owner": {
+    "name": "AAIS, Harvard University IT"
+  },
+  "plugins": [
+    {
+      "name": "huit-github",
+      "source": "./",
+      "description": "GitHub integration for AAIS / HUIT without a Personal Access Token (github.com via remote MCP + OAuth, github.huit.harvard.edu via local MCP + gh login).",
+      "category": "productivity",
+      "tags": ["github", "mcp", "huit"]
+    }
+  ]
+}

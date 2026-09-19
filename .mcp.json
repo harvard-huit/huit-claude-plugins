@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "github-huit": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/github-mcp-ghes.sh",
+      "args": []
+    }
+  }
+}
