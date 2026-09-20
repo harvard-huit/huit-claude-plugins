@@ -44,13 +44,14 @@ PAT is created or stored.
 
 | Host | Org | How it works |
 |---|---|---|
-| github.com | `harvard-huit` | GitHub's hosted MCP server, OAuth via `/mcp` |
+| github.com | `harvard-huit` | GitHub's hosted MCP server, sent the token from `gh auth login` on each connection |
 | github.huit.harvard.edu (GHES) | `HUIT` | GitHub's `github-mcp-server` binary run locally, using the token from `gh auth login` |
 
 Run `/huit-github:github-setup` and follow along. It checks what you already
-have, installs `gh` (and `github-mcp-server` if you need GHES), runs
-`gh auth login --web` for the host(s) you need, and has you run `/mcp` once to
-authorize the github.com server.
+have, installs `gh` (and `github-mcp-server` if you need GHES), and runs
+`gh auth login --web` for the host(s) you need. That login is the whole
+authentication step; there is no separate `/mcp` login. Restart Claude Code
+after a new login so the MCP servers pick it up.
 
 You get MCP tools for issues, pull requests, repos, code search, and Actions on
 whichever host(s) you connected (`github` for github.com, `github-huit` for
@@ -64,18 +65,28 @@ Requirements: `gh`. For GHES only, `github-mcp-server` on your PATH
 otherwise the release binary from `github/github-mcp-server` in `~/.local/bin`;
 the skill walks through both).
 
-Admin notes: because `harvard-huit` enforces SAML SSO, an org owner must
-authorize GitHub's MCP OAuth app for the org once; until then `/mcp` login for
-`github` fails with an org-authorization error. This is separate from the
-GitHub connector setting in claude.ai. Claude Code's MCP configuration is local
-to the machine and authorizes directly against GitHub, not through Anthropic.
+Admin notes: no admin action is required. Both servers use the token GitHub
+CLI's own OAuth app issued at `gh auth login`, which `harvard-huit` already
+accepts. This is separate from the GitHub connector setting in claude.ai.
+Claude Code's MCP configuration is local to the machine and authenticates
+directly against GitHub, not through Anthropic.
 
-Troubleshooting: if `github-huit` shows failed in `/mcp`, run the wrapper by
-hand to see why. Find the install path with `claude plugin list --json`
-(`installPath`), then `<installPath>/bin/github-mcp-ghes.sh </dev/null`. Usual
-causes: no `gh` login for github.huit.harvard.edu, or the binary not on PATH.
-A 403 mentioning SAML on github.com means `gh auth refresh --hostname github.com`
-and authorizing the token for `harvard-huit`.
+Why not the hosted server's own OAuth: choosing `github` in `/mcp` fails with
+"Incompatible auth server: does not support dynamic client registration".
+GitHub's authorization server does not implement Dynamic Client Registration,
+which Claude Code's MCP OAuth flow needs. The plugin sidesteps it with a
+`headersHelper` script that hands Claude Code the `gh` token instead.
+
+Troubleshooting: if a server shows failed in `/mcp`, run its script by hand to
+see why. Find the install path with `claude plugin list --json`
+(`installPath`), then `<installPath>/bin/github-mcp-ghes.sh </dev/null` for
+GHES, or `<installPath>/bin/github-mcp-headers.sh | sed -E 's/Bearer .*/Bearer <redacted>/'`
+for github.com (keep the `sed`; the raw output is your token). Usual causes:
+no `gh` login for that host, or the GHES binary not on PATH. A 403 mentioning
+SAML on github.com means `gh auth refresh --hostname github.com` and
+authorizing the token for `harvard-huit`. If `GH_TOKEN` or `GITHUB_TOKEN` is
+exported in your shell, `gh` (and therefore both servers) uses that instead of
+the keyring login.
 
 ## huit-aws
 
@@ -112,7 +123,8 @@ The skill never reads your credentials files and never prints keys.
 .claude-plugin/marketplace.json          the marketplace (two plugins)
 plugins/huit-github/
   .claude-plugin/plugin.json             manifest
-  .mcp.json                              github (remote, OAuth) + github-huit (wrapper)
+  .mcp.json                              github (hosted, headersHelper) + github-huit (wrapper)
+  bin/github-mcp-headers.sh              gh token -> Authorization header for the hosted server
   bin/github-mcp-ghes.sh                 GITHUB_HOST + gh token -> github-mcp-server stdio
   hooks/hooks.json                       SessionStart -> scripts/check-gh-auth.sh
   scripts/check-gh-auth.sh               login nudge, silent when all is well

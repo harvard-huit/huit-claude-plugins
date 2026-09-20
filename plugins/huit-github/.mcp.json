@@ -2,7 +2,8 @@
   "mcpServers": {
     "github": {
       "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/"
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headersHelper": "${CLAUDE_PLUGIN_ROOT}/bin/github-mcp-headers.sh"
     },
     "github-huit": {
       "type": "stdio",

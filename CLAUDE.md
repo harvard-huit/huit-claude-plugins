@@ -11,6 +11,9 @@ plugin.
 Status (2026-09-19): restructured to `plugins/<name>/`, both plugins validate
 and install locally. The GHES path is verified end to end. Nothing is committed
 or published yet.
+Status (2026-09-20): the github.com path no longer uses the hosted server's
+own OAuth (`/mcp` login fails, see decision 2). It now reuses `gh`'s token via
+a `headersHelper` script; `huit-github` bumped to 0.3.0.
 
 @.claude/memory/INDEX.md
 
@@ -27,10 +30,10 @@ or published yet.
 
 ## Two GitHubs, two auth paths
 
-| Host | Org | Remote MCP (OAuth) | `gh` device-flow login | Local MCP binary |
+| Host | Org | Hosted MCP server (token from `gh` via `headersHelper`) | `gh` device-flow login | Local MCP binary |
 |---|---|---|---|---|
 | github.com | `harvard-huit` (SAML SSO) | yes, primary path | yes | not needed |
-| github.huit.harvard.edu (GHES 3.17) | `HUIT` | **no** (GHES has no remote hosting) | untested, see below | yes, via `GITHUB_HOST` |
+| github.huit.harvard.edu (GHES 3.19) | `HUIT` | **no** (GHES has no remote hosting) | yes, verified 2026-09-19 | yes, via `GITHUB_HOST` |
 
 Some repos are live on GHES while the github.com copy is a stale mirror. Check
 `pushed_at` on both before assuming which is canonical. Cross-instance `#N`
@@ -45,11 +48,26 @@ references do not auto-link.
    `huit-plugins` so the marketplace can grow beyond GitHub; the same day
    `huit-github` moved from the repo root to `plugins/huit-github/` (version
    0.1.0 to 0.2.0) when `huit-aws` was added.
-2. **github.com path is the remote GitHub MCP server over HTTP with OAuth.**
-   Declared in plugin-root `.mcp.json` as `{"type": "http", "url": "https://api.githubcopilot.com/mcp/"}`.
-   User authenticates once via `/mcp`. Because `harvard-huit` enforces SAML, an
-   org owner must authorize the OAuth app for the org one time. That is the
-   only admin ask on this path.
+2. **github.com path is GitHub's hosted MCP server over HTTP, authenticated
+   with `gh`'s token through a `headersHelper`.** Declared in plugin-root
+   `.mcp.json` as `{"type": "http", "url": "https://api.githubcopilot.com/mcp/",
+   "headersHelper": "${CLAUDE_PLUGIN_ROOT}/bin/github-mcp-headers.sh"}`. The
+   helper prints `{"Authorization":"Bearer <gh auth token>"}`; Claude Code runs
+   it on every connection and again after a 401/403. `${CLAUDE_PLUGIN_ROOT}` is
+   documented as expanded in `url`, `headers`, and `headersHelper`.
+   **The server's own OAuth does not work from Claude Code** (hit 2026-09-20):
+   GitHub's authorization server has no Dynamic Client Registration, so
+   choosing `github` in `/mcp` fails with "Incompatible auth server: does not
+   support dynamic client registration". Claude Code's alternative is a
+   pre-registered `oauth.clientId` plus a client secret, which would mean an
+   OAuth app registration and a secret to distribute; the `gh` token needs
+   neither. Verified 2026-09-20 that the hosted server answers `initialize`
+   with 200 given a `gh`-stored token and 401 without one. Caveat: the token
+   in this machine's keyring for github.com is a classic PAT (`ghp_`, pasted
+   in at some point), so acceptance of a device-flow `gho_` token is expected
+   but not yet observed. No org-owner approval of an OAuth app is needed on
+   this path; SAML authorization of the `gh` token (`gh auth refresh`) is the
+   only per-person step.
 3. **GHES path is the local `github-mcp-server` binary behind a wrapper script.**
    `bin/github-mcp-ghes.sh` sets `GITHUB_HOST=https://github.huit.harvard.edu`,
    pulls the token from `gh auth token --hostname github.huit.harvard.edu`, and
@@ -58,9 +76,10 @@ references do not auto-link.
    OAuth device-flow login.
 4. **A `github-setup` skill does the bootstrap.** It checks for `gh` and the MCP
    binary, offers the install commands (brew on Mac, apt/dnf otherwise), runs
-   `gh auth login --hostname <host> --web` for whichever host the person needs,
-   and tells them to run `/mcp` for the github.com OAuth. A skill cannot install
-   anything itself; it instructs Claude, and the user approves each command.
+   `gh auth login --hostname <host> --web` for whichever host the person needs.
+   No `/mcp` login on either host; both servers read the `gh` token. A skill
+   cannot install anything itself; it instructs Claude, and the user approves
+   each command.
 5. **A `SessionStart` hook nudges, never blocks.** `hooks/hooks.json` runs a
    script that checks `gh auth status` for both hosts and prints a one-line hint
    if either is missing. It must exit 0 quickly and be silent when all is well.
@@ -84,7 +103,8 @@ huit-claude-plugins/
 ├── plugins/
 │   ├── huit-github/
 │   │   ├── .claude-plugin/plugin.json   # name, version, description, author, repository
-│   │   ├── .mcp.json                    # github (remote http, OAuth) + github-huit (wrapper script)
+│   │   ├── .mcp.json                    # github (hosted http, headersHelper) + github-huit (wrapper script)
+│   │   ├── bin/github-mcp-headers.sh    # gh auth token -> {"Authorization":"Bearer ..."} for the hosted server
 │   │   ├── bin/github-mcp-ghes.sh       # GITHUB_HOST + gh auth token -> github-mcp-server stdio
 │   │   ├── hooks/hooks.json             # SessionStart -> scripts/check-gh-auth.sh
 │   │   ├── scripts/check-gh-auth.sh
@@ -114,9 +134,17 @@ in frontmatter is the invocation name (`/<plugin>:<skill>`); keep it stable.
       Yes (verified 2026-09-19, binary 1.12.2): the wrapper started with
       `host=https://github.huit.harvard.edu`, and `get_me` plus
       `search_repositories` succeeded over stdio using the `gh` OAuth token.
-- [ ] **Does the remote server need a Copilot license or org policy?** Nothing
-      documented says so, but confirm with a non-Copilot account.
-- [ ] **Who authorizes the OAuth app for `harvard-huit` SAML?** Identify the org owner.
+- [ ] **Does the hosted server need a Copilot license or org policy?** Nothing
+      documented says so. It answered JaZahn's `gh`-stored token on 2026-09-20;
+      still confirm with an account that has no Copilot seat.
+- [x] **Who authorizes the OAuth app for `harvard-huit` SAML?** Moot as of
+      2026-09-20: the hosted server's OAuth flow is unusable from Claude Code
+      (no DCR), and the `gh`-token path uses GitHub CLI's own OAuth app, which
+      the org already accepts wherever `gh` works against it.
+- [ ] **Does a device-flow `gho_` token work with the hosted server?** Expected
+      yes; verify by running `gh auth login --hostname github.com --web` on a
+      machine whose keyring holds a PAT, then checking `/mcp` shows `github`
+      connected.
 - [x] **Where does the marketplace repo live?** github.com
       `harvard-huit/huit-claude-plugins`, visibility Internal (visible to the
       enterprise, not public). Installing requires a github.com login that is
@@ -286,6 +314,15 @@ is one source of truth.
   checksum-verified. Tested 2026-09-19.
 - Hook and wrapper scripts: `#!/usr/bin/env bash`, `set -euo pipefail`, no
   Mac-only paths (this will run on Linux too). Never print tokens.
+- **Testing token-emitting scripts from Claude's Bash tool.** Always redact:
+  pipe `bin/github-mcp-headers.sh` through
+  `sed -E 's/Bearer [A-Za-z0-9_]+/Bearer <redacted>/'` and `gh auth token`
+  through `cut -c1-4`. Pointing `gh` at an empty `GH_CONFIG_DIR` is **not** a
+  no-login simulation: `gh` still finds the keyring entry and also honors
+  `GH_TOKEN`/`GITHUB_TOKEN`. A 2026-09-20 attempt at exactly that printed a
+  live PAT into a transcript. Simulate "no login" with `PATH` that lacks `gh`,
+  or by unsetting the env vars and using a throwaway `GH_CONFIG_DIR` **and**
+  `GH_TOKEN=` only if you have first confirmed there is no keyring entry.
 - Never put a token, hostname-specific secret, or a person's login in this repo.
 - Memory routing: durable, portable, project-scoped facts go in
   `.claude/memory/` here (this repo is git-tracked). Machine-specific facts stay
