@@ -1,8 +1,9 @@
-# huit-claude-plugins
+# huit-agent-plugins
 
 A self-hosting Claude Code plugin marketplace for the AAIS group / HUIT org.
-Repo: `harvard-huit/huit-claude-plugins` (github.com, Internal). Marketplace
-name: `huit-claude-plugins`. It holds two plugins: `huit-github`, which gives
+Repo: `harvard-huit/huit-agent-plugins` (github.com; **public** as of a
+2026-09-25 check, although Internal was intended, see the open question
+below). Marketplace name: `huit-agent-plugins`. It holds two plugins: `huit-github`, which gives
 people a working GitHub integration **without creating or storing a Personal
 Access Token**, and `huit-aws`, which logs people into HUIT AWS accounts via
 HarvardKey (see "huit-aws plugin" below). Onboarding is two slash commands per
@@ -14,6 +15,10 @@ or published yet.
 Status (2026-09-20): the github.com path no longer uses the hosted server's
 own OAuth (`/mcp` login fails, see decision 2). It now reuses `gh`'s token via
 a `headersHelper` script; `huit-github` bumped to 0.3.0.
+Status (2026-09-25): renamed from `huit-claude-plugins` to `huit-agent-plugins`
+(repo, marketplace name, local checkout) before anyone else installs it, so
+the name is vendor-neutral. Versions bumped to 0.3.1 / 0.1.1 for the new
+`repository` URL. Still not announced to the org.
 
 @.claude/memory/INDEX.md
 
@@ -43,11 +48,25 @@ references do not auto-link.
 
 1. **One repo is both the plugins and the marketplace.** `.claude-plugin/marketplace.json`
    at the root lists each plugin with `"source": "./plugins/<name>"`. Users run
-   `/plugin marketplace add harvard-huit/huit-claude-plugins` then
-   `/plugin install <name>@huit-claude-plugins`. Renamed 2026-09-19 from
-   `huit-plugins` so the marketplace can grow beyond GitHub; the same day
-   `huit-github` moved from the repo root to `plugins/huit-github/` (version
-   0.1.0 to 0.2.0) when `huit-aws` was added.
+   `/plugin marketplace add harvard-huit/huit-agent-plugins` then
+   `/plugin install <name>@huit-agent-plugins`. Naming history: started as
+   `huit-github-plugin`; renamed 2026-09-19 to `huit-claude-plugins` so the
+   marketplace can grow beyond GitHub (the same day `huit-github` moved from
+   the repo root to `plugins/huit-github/`, version 0.1.0 to 0.2.0, when
+   `huit-aws` was added); renamed 2026-09-25 to `huit-agent-plugins` to drop
+   the vendor name. The marketplace name is baked into every user's install
+   command and local registration, so **do not rename again** once anyone
+   else has added it.
+   **Codex / Agent Plugins (checked 2026-09-25):** OpenAI's Codex reads the
+   same `skills/<name>/SKILL.md` layout and accepts
+   `.claude-plugin/marketplace.json` as a legacy fallback, so a Codex port of
+   this repo is plausible but not "just an extra directory". Codex wants a
+   root `plugin.json` in the vendor-neutral Agent Plugins schema
+   (agent-plugins.org; steering committee is Amazon, Cursor, Microsoft,
+   OpenAI, Vercel, not Anthropic) and a root `mcp.json`. It has no
+   `headersHelper` and no `${CLAUDE_PLUGIN_ROOT}`, and declares hooks under
+   an `extensions.com.openai` namespace. The GHES-style stdio wrapper that
+   reads the token from `gh` is the pattern that would port; keep it.
 2. **github.com path is GitHub's hosted MCP server over HTTP, authenticated
    with `gh`'s token through a `headersHelper`.** Declared in plugin-root
    `.mcp.json` as `{"type": "http", "url": "https://api.githubcopilot.com/mcp/",
@@ -97,9 +116,9 @@ references do not auto-link.
 ## Layout
 
 ```
-huit-claude-plugins/
+huit-agent-plugins/
 ├── .claude-plugin/
-│   └── marketplace.json      # name: huit-claude-plugins, plugins: huit-github, huit-aws
+│   └── marketplace.json      # name: huit-agent-plugins, plugins: huit-github, huit-aws
 ├── plugins/
 │   ├── huit-github/
 │   │   ├── .claude-plugin/plugin.json   # name, version, description, author, repository
@@ -145,9 +164,12 @@ in frontmatter is the invocation name (`/<plugin>:<skill>`); keep it stable.
       yes; verify by running `gh auth login --hostname github.com --web` on a
       machine whose keyring holds a PAT, then checking `/mcp` shows `github`
       connected.
-- [x] **Where does the marketplace repo live?** github.com
-      `harvard-huit/huit-claude-plugins`, visibility Internal (visible to the
-      enterprise, not public). Installing requires a github.com login that is
+- [ ] **Where does the marketplace repo live, and at what visibility?** github.com
+      `harvard-huit/huit-agent-plugins`. Intended visibility is Internal
+      (visible to the enterprise, not public), but `gh api` reported
+      `visibility: public` on 2026-09-25 during the rename. Decide whether to
+      set it to Internal before announcing; nothing sensitive is in the tree
+      either way. With Internal, installing requires a github.com login that is
       SSO-authorized for `harvard-huit`, so `gh auth login --hostname github.com`
       comes before `/plugin marketplace add`.
 - [x] **Does the local server's OAuth device-code fallback work for GHES?**
@@ -283,9 +305,9 @@ is one source of truth.
   dir, and skill frontmatter for a `skills` dir. So run all five:
   `claude plugin validate .`, `... plugins/huit-github`, `... plugins/huit-aws`,
   `... plugins/huit-github/skills`, `... plugins/huit-aws/skills`.
-- Test locally with `/plugin marketplace add ~/workshop/huit-claude-plugins` then
-  `/plugin install <name>@huit-claude-plugins` (or the same via `claude plugin ...`
-  on the CLI). Installs copy to `~/.claude/plugins/cache/huit-claude-plugins/<name>/<version>/`;
+- Test locally with `/plugin marketplace add ~/workshop/huit-agent-plugins` then
+  `/plugin install <name>@huit-agent-plugins` (or the same via `claude plugin ...`
+  on the CLI). Installs copy to `~/.claude/plugins/cache/huit-agent-plugins/<name>/<version>/`;
   `claude plugin list --json` shows `installPath`. The cache is a copy, not a
   link: after editing anything, `claude plugin uninstall` then `install` again
   (or bump the version). `.mcp.json` and hooks are read at install time; skills
@@ -296,8 +318,8 @@ is one source of truth.
   background after session start (when auto-update is enabled for the
   marketplace, which is off by default for non-Anthropic marketplaces) and
   prompts `/reload-plugins` when a version changed. Without a bump users keep
-  the cached copy. Manual path: `/plugin marketplace update huit-claude-plugins`
-  then `/plugin update <name>@huit-claude-plugins`. Admins can set
+  the cached copy. Manual path: `/plugin marketplace update huit-agent-plugins`
+  then `/plugin update <name>@huit-agent-plugins`. Admins can set
   `autoUpdate: true` on the marketplace entry in managed settings. No custom
   update-check hook; the built-in mechanism covers it.
 - Scripts must be executable in git (`chmod +x`, and check `git ls-files -s`

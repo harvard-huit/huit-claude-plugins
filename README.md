@@ -1,4 +1,4 @@
-# huit-claude-plugins
+# huit-agent-plugins
 
 Claude Code plugins for the AAIS group at Harvard University IT. This repo is
 both the marketplace and the plugins.
@@ -15,9 +15,9 @@ make sure `gh` is logged in there (`gh auth login --hostname github.com --web`).
 Then, inside Claude Code:
 
 ```
-/plugin marketplace add harvard-huit/huit-claude-plugins
-/plugin install huit-github@huit-claude-plugins
-/plugin install huit-aws@huit-claude-plugins
+/plugin marketplace add harvard-huit/huit-agent-plugins
+/plugin install huit-github@huit-agent-plugins
+/plugin install huit-aws@huit-agent-plugins
 ```
 
 Install whichever you need. You approve every command a skill proposes.
@@ -27,13 +27,13 @@ Install whichever you need. You approve every command a skill proposes.
 Claude Code checks marketplaces for updates shortly after a session starts and
 tells you to run `/reload-plugins` when something changed, but only if
 auto-update is enabled for this marketplace. It is off by default for
-non-Anthropic marketplaces: open `/plugin`, find `huit-claude-plugins`, and turn
+non-Anthropic marketplaces: open `/plugin`, find `huit-agent-plugins`, and turn
 auto-update on. To update by hand:
 
 ```
-/plugin marketplace update huit-claude-plugins
-/plugin update huit-github@huit-claude-plugins
-/plugin update huit-aws@huit-claude-plugins
+/plugin marketplace update huit-agent-plugins
+/plugin update huit-github@huit-agent-plugins
+/plugin update huit-aws@huit-agent-plugins
 /reload-plugins
 ```
 
