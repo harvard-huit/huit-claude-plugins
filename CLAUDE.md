@@ -22,7 +22,16 @@ the name is vendor-neutral. Versions bumped to 0.3.1 / 0.1.1 for the new
 `repository` URL. Still not announced to the org.
 Status (2026-09-25, later): added the `quiz` plugin (0.1.0) with `session`
 (moved from JaZahn's personal `session-quiz` skill) and a new `project` skill.
-Uncommitted; the personal `session-quiz` stays until the plugin is installed.
+Committed as 197a9d9 and pushed to `main` 2026-09-26; the personal
+`session-quiz` was deleted the same day. Two copies exist on JaZahn's
+machine: the marketplace install in `~/.claude/plugins/cache/` (the one that
+loaded on 2026-09-26) and `quiz@synced` from claude.ai plugin sync. They
+carry the same version; if they ever diverge, the cache copy is the one
+`/plugin update` refreshes.
+Status (2026-09-26): `huit-aws` 0.2.0. The `aws-login` skill now defaults to
+`aws login` into the `default` profile (person picks any role in the console)
+and refreshes saved profiles that share the session; `login_all` is the
+"all" path only. Uncommitted.
 
 @.claude/memory/INDEX.md
 
@@ -262,20 +271,65 @@ is one source of truth.
 - **`gh release download` from GHES works** now that `gh` holds a GHES OAuth
   login, so the skill can offer the `aws-login` install without curl or a PAT.
 
+### Facts established 2026-09-26 (from awscli 2.36.49 and aws-login source, do not re-derive)
+
+- **`aws login` caches by session, not profile.** The cache file is
+  `~/.aws/login/cache/<sha256(login_session ARN)>.json`
+  (`botocore.utils.generate_login_cache_key`). Every profile whose
+  `login_session` equals the same ARN reads the same cache, so one attach
+  refreshes all of them. The ARN is stable per person, role, and region.
+- **`aws login` refuses a profile with static keys**, error `Profile 'X' is
+  already configured with Access Key credentials`. The check reads
+  `session.full_config`, which merges `~/.aws/credentials` into the profile
+  map, so an `aws-login` stanza under the same name blocks it.
+- **`aws login` writes `[default]` in `~/.aws/config`** when the profile is
+  `default` (`[profile X]` otherwise), plus `region` only if it had to prompt.
+  It honors `AWS_PROFILE` when `--profile` is absent, so the skill always
+  passes `--profile`.
+- **Overwriting an existing `login_session` prompts `(y/n)` on stdin.** From
+  Claude's Bash tool that is EOF and a traceback; `printf 'y\n' | aws login
+  --profile X` answers it. The prompt is skipped when the ARN is unchanged.
+- **`aws logout --profile X`** deletes only the cache file for X's session
+  (which other profiles may share); it does not remove `login_session` from
+  the config, so it does not avoid the prompt above.
+- **`aws-login` and `default`:** `login <alias>` and `switch <alias>` write
+  static keys into `[default]` in `~/.aws/credentials` (`commands.go`
+  `SaveAwsCredentials` with a default credential, and `switchRoles`).
+  `login_all` passes `nil` and writes only the mapped aliases. So the skill
+  runs `login_all` but never `login <alias>` or `switch`. The empty
+  `[DEFAULT]` (uppercase) seen in some credentials files is a leftover of the
+  ini library's special section; harmless.
+- `aws configure get login_session --profile X` reads the key without opening
+  the config file by hand (exit 1 when absent); `aws configure list-profiles`
+  lists names from both files.
+
 ### Skill design (`skills/aws-login/SKILL.md`)
 
-- Two branches, chosen by the request:
-  - "log into all my AWS profiles" or no alias given: `aws-login login_all`.
-  - a named alias, or an `ExpiredToken` / `InvalidClientTokenId` error on an
-    `aws` command: `open <okta-url>` (Mac) or print the URL (Linux), tell the
-    user to finish the browser login, then on their go-ahead run
-    `aws login --profile <alias>`. On a host without a browser (Cloud9) use
-    `aws login --remote`.
+- Two branches, chosen by the request (changed 2026-09-26 by JaZahn; before
+  that, no alias meant `login_all`):
+  - **Default, `aws login` (branch B):** no profile named means target
+    `default`; the person picks any account and role on the Okta role
+    chooser. A named profile means `--profile <name>`. Flow: check the target
+    for static keys and an existing `login_session`, `open <okta-url>` (Mac)
+    or print the URL (Linux), end the turn, then on their go-ahead run
+    `aws login --profile <target>` (piping `y` if a session is being
+    replaced), verify with STS, then compare the new `login_session` against
+    every profile from `aws configure list-profiles`: same ARN means already
+    refreshed (say so, verify); a plain-name profile for the same account
+    with a different or no session gets an offered `aws login --profile
+    <name>` (one click, same console session); a `<name>-login` static alias
+    cannot be refreshed this way, offer branch A. On a host without a browser
+    (Cloud9) use `aws login --remote`.
+  - **Branch A, `aws-login login_all`:** "all", "everything", several
+    aliases, or `aws-login` asked for by name; also the fallback when `aws
+    login` is unavailable.
 - Always finish with `aws sts get-caller-identity --profile <alias>`.
 - Read aliases from `aws-login list-role-map`; never hardcode a person's
   aliases or account IDs in the plugin.
-- Prefer `aws-login switch <alias>` over re-authenticating when credentials for
-  the alias are already cached.
+- Never run `aws-login switch` or `aws-login login <alias>`: both write static
+  keys to `[default]`, which shadows and then blocks the `aws login` default
+  session (see the 2026-09-26 facts). A `[default]` with static keys is the
+  one edit the skill asks the person to make.
 - **Profile naming convention (decided 2026-09-19 by JaZahn):** `aws-login`
   aliases in `profile_map` end in `-login` (`admints-dev-login`), and `aws
   login` sessions use the plain account name (`admints-dev`). This avoids the
@@ -297,8 +351,13 @@ is one source of truth.
       unverified: whether `aws login --profile <new-name>` creates a
       `[profile ...]` stanza in `~/.aws/config` for a name that does not exist
       yet, and whether it writes `region`.
-- [ ] Next `aws-login login_all` should write `*-login` stanzas only; confirm
-      no plain-name stanza reappears in `~/.aws/credentials`.
+- [x] Next `aws-login login_all` should write `*-login` stanzas only; confirmed
+      from source 2026-09-26: `login_all` writes only mapped aliases. The
+      `[default]` static stanza comes from `login <alias>` or `switch`.
+- [ ] Exercise the new default flow end to end: remove the static `[default]`
+      from `~/.aws/credentials`, run `aws login --profile default` with a
+      different role than the one currently in `default` (the `printf 'y\n'`
+      path), and confirm `admints-<x>` reports "same session (refreshed)".
 - [ ] Test the single-alias branch on Cloud9: no `open`, must fall back to the
       printed URL and `aws login --remote`.
 - [ ] Confirm `SignInLocalDevelopmentAccess` is on every standard SAML role, not
@@ -341,9 +400,16 @@ name `quiz` was chosen for the invocation (`/quiz:session`, `/quiz:project`);
 - `project` reads only. In a large repo it delegates the wide scans to an
   Explore subagent. It ranks candidates by cost-of-being-wrong: security,
   conventions with no guardrail, reversed decisions, setup traps.
-- To do: install the plugin from a pushed commit, confirm `/quiz:session` and
-  `/quiz:project` both appear and that the shared reference path resolves,
-  then delete the personal `session-quiz` so there is one copy.
+- [x] Installed from the pushed commit 2026-09-26; `/quiz:session` and
+  `/quiz:project` both appear after `/reload-plugins`; personal
+  `session-quiz` deleted. Gotcha: the desktop app's "check for updates"
+  refreshes the marketplace clone but not the plugin picker, see
+  `.claude/memory/marketplace-update-vs-plugin-list.md`.
+- [x] Verified 2026-09-26 on the first `/quiz:session` run from the installed
+  copy: `${CLAUDE_PLUGIN_ROOT}` was substituted to the cache path and
+  `references/quiz-format.md` read fine. Consequence: a quiz skill zipped on
+  its own for claude.ai upload loses its format; upload the plugin, not a
+  skill.
 
 ## Conventions
 

@@ -6,7 +6,7 @@ both the marketplace and the plugins.
 | Plugin | What it does | Entry point |
 |---|---|---|
 | `huit-github` | GitHub access for both of our GitHubs **without a Personal Access Token** | `/huit-github:github-setup` |
-| `huit-aws` | Log into HUIT AWS accounts with HarvardKey, from inside Claude Code | `/huit-aws:aws-login <account>` |
+| `huit-aws` | Log into HUIT AWS accounts with HarvardKey, from inside Claude Code | `/huit-aws:aws-login [account]` |
 | `quiz` | Multiple-choice comprehension checks on the current session or on the repo's gotchas | `/quiz:session`, `/quiz:project` |
 
 ## Install
@@ -74,11 +74,34 @@ accepts. This is separate from the GitHub connector setting in claude.ai.
 Claude Code's MCP configuration is local to the machine and authenticates
 directly against GitHub, not through Anthropic.
 
-Why not the hosted server's own OAuth: choosing `github` in `/mcp` fails with
-"Incompatible auth server: does not support dynamic client registration".
-GitHub's authorization server does not implement Dynamic Client Registration,
-which Claude Code's MCP OAuth flow needs. The plugin sidesteps it with a
-`headersHelper` script that hands Claude Code the `gh` token instead.
+### Why `gh auth login` and not an MCP login
+
+You might expect to authenticate in `/mcp`, the way other remote MCP servers
+work. That was the first design, and it fails on both hosts for different
+reasons.
+
+- **github.com.** Choosing `github` in `/mcp` fails with "Incompatible auth
+  server: does not support dynamic client registration". Claude Code's MCP
+  OAuth flow registers itself as a client on the fly, and GitHub's
+  authorization server does not implement that (Dynamic Client Registration).
+  Claude Code's only other option is a pre-registered OAuth app: a client ID
+  plus a client secret. That would mean an app to register, an org owner to
+  approve it for `harvard-huit` SAML, and a secret to hand to every user,
+  which is the kind of shared credential this plugin exists to avoid.
+- **GHES.** There is no hosted MCP server for github.huit.harvard.edu at all,
+  so the plugin runs `github-mcp-server` locally. That binary can do its own
+  device-code login, but only with the OAuth app baked into it, which is
+  registered on github.com. Using it against GHES would need an OAuth app
+  registered on the GHES instance by an admin.
+
+GitHub CLI already solves both problems: `gh auth login --web` uses GitHub's
+own OAuth app, which both hosts accept, issues a short-lived OAuth token
+rather than a PAT, and stores it in your keyring. So the plugin reads that
+token and passes it along: a `headersHelper` script puts it in the
+`Authorization` header for the hosted server, and a wrapper script hands it
+to the local binary for GHES. One browser login per host covers both the MCP
+tools and the `gh` fallback, and nothing is stored that you did not already
+have.
 
 Troubleshooting: if a server shows failed in `/mcp`, run its script by hand to
 see why. Find the install path with `claude plugin list --json`
@@ -99,18 +122,26 @@ HarvardKey (Okta) straight to IAM roles, so there is no IAM Identity Center and
 
 | Tool | Best for | You do | Credentials last |
 |---|---|---|---|
+| `aws login` (AWS CLI 2.32+), the default | your `default` profile, or one named profile | log into the console in your browser, pick a role, then click once | refreshed every 15 minutes while the console session lives |
 | HUIT `aws-login` CLI | every mapped account at once | approve one Okta Verify push | fixed, default 4 hours |
-| `aws login` (AWS CLI 2.32+) | one long single-role session | log into the console in your browser, then click once | refreshed every 15 minutes while the console session lives |
 
-Say "log me into admints-dev", run `/huit-aws:aws-login admints-dev`, or just
-let an `aws` command fail with `ExpiredToken`; the skill picks up from there.
-It checks what you have, chooses the branch, tells you what to do out of band
-before each blocking step, and finishes with `aws sts get-caller-identity`.
+Say "log me into AWS" or run `/huit-aws:aws-login` and the skill opens the
+HarvardKey console link, waits for you to pick an account and role, then
+attaches `aws login` to that session as your `default` profile. Any saved
+profile that points at the same console session is refreshed at the same
+time, because `aws login` caches by session, not by profile name. Name a
+profile (`/huit-aws:aws-login admints-dev`) to attach under that name
+instead, or say "all" for the one-push `aws-login login_all` path. An `aws`
+command failing with `ExpiredToken` also triggers it. Every blocking step is
+announced before it runs, and it finishes with `aws sts get-caller-identity`.
 
-Profile naming: `aws-login` aliases end in `-login` (`admints-dev-login`) and
-`aws login` sessions use the plain account name (`admints-dev`). The two tools
-must not share a profile name because static keys in `~/.aws/credentials` win
-over an `aws login` session under the same name. The skill enforces this.
+Profile naming: `aws-login` aliases end in `-login` (`admints-dev-login`);
+plain account names (`admints-dev`) and `default` belong to `aws login`.
+Static keys in `~/.aws/credentials` win over an `aws login` session under the
+same name and make `aws login` refuse that profile, so the skill never runs
+`aws-login login <alias>` or `aws-login switch`, both of which write static
+keys into `[default]`. If you already have such a `[default]`, the skill asks
+you to remove it once.
 
 Requirements: AWS CLI 2.32 or newer for `aws login`; the HUIT `aws-login`
 binary (releases on github.huit.harvard.edu, `HUIT/aws-login-saml-cli`) for
