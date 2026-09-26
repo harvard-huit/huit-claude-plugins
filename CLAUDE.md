@@ -1,13 +1,14 @@
 # huit-agent-plugins
 
 A self-hosting Claude Code plugin marketplace for the AAIS group / HUIT org.
-Repo: `harvard-huit/huit-agent-plugins` (github.com; **public** as of a
-2026-09-25 check, although Internal was intended, see the open question
-below). Marketplace name: `huit-agent-plugins`. It holds two plugins: `huit-github`, which gives
+Repo: `harvard-huit/huit-agent-plugins` (github.com, **public** by decision
+on 2026-09-25, see the visibility item under open questions). Marketplace
+name: `huit-agent-plugins`. It holds three plugins: `huit-github`, which gives
 people a working GitHub integration **without creating or storing a Personal
-Access Token**, and `huit-aws`, which logs people into HUIT AWS accounts via
-HarvardKey (see "huit-aws plugin" below). Onboarding is two slash commands per
-plugin.
+Access Token**, `huit-aws`, which logs people into HUIT AWS accounts via
+HarvardKey (see "huit-aws plugin" below), and `quiz`, multiple-choice
+comprehension checks on the current session or a repo's gotchas (see "quiz
+plugin" below). Onboarding is two slash commands per plugin.
 
 Status (2026-09-19): restructured to `plugins/<name>/`, both plugins validate
 and install locally. The GHES path is verified end to end. Nothing is committed
@@ -19,6 +20,9 @@ Status (2026-09-25): renamed from `huit-claude-plugins` to `huit-agent-plugins`
 (repo, marketplace name, local checkout) before anyone else installs it, so
 the name is vendor-neutral. Versions bumped to 0.3.1 / 0.1.1 for the new
 `repository` URL. Still not announced to the org.
+Status (2026-09-25, later): added the `quiz` plugin (0.1.0) with `session`
+(moved from JaZahn's personal `session-quiz` skill) and a new `project` skill.
+Uncommitted; the personal `session-quiz` stays until the plugin is installed.
 
 @.claude/memory/INDEX.md
 
@@ -128,9 +132,14 @@ huit-agent-plugins/
 │   │   ├── hooks/hooks.json             # SessionStart -> scripts/check-gh-auth.sh
 │   │   ├── scripts/check-gh-auth.sh
 │   │   └── skills/github-setup/SKILL.md # install gh / MCP binary, device-flow login per host, /mcp, allowlist
-│   └── huit-aws/
+│   ├── huit-aws/
+│   │   ├── .claude-plugin/plugin.json
+│   │   └── skills/aws-login/SKILL.md    # aws-login login_all or aws login attach; see design below
+│   └── quiz/
 │       ├── .claude-plugin/plugin.json
-│       └── skills/aws-login/SKILL.md    # aws-login login_all or aws login attach; see design below
+│       ├── references/quiz-format.md    # shared: writing questions, asking, grading
+│       ├── skills/session/SKILL.md      # /quiz:session, the default "quiz me"
+│       └── skills/project/SKILL.md      # /quiz:project, gotchas of the repo
 ├── README.md                 # user-facing: install, updates, one section per plugin
 ├── CLAUDE.md                 # this file
 └── .claude/memory/INDEX.md   # committed project memory (portable across machines)
@@ -164,14 +173,22 @@ in frontmatter is the invocation name (`/<plugin>:<skill>`); keep it stable.
       yes; verify by running `gh auth login --hostname github.com --web` on a
       machine whose keyring holds a PAT, then checking `/mcp` shows `github`
       connected.
-- [ ] **Where does the marketplace repo live, and at what visibility?** github.com
-      `harvard-huit/huit-agent-plugins`. Intended visibility is Internal
-      (visible to the enterprise, not public), but `gh api` reported
-      `visibility: public` on 2026-09-25 during the rename. Decide whether to
-      set it to Internal before announcing; nothing sensitive is in the tree
-      either way. With Internal, installing requires a github.com login that is
-      SSO-authorized for `harvard-huit`, so `gh auth login --hostname github.com`
-      comes before `/plugin marketplace add`.
+- [x] **Where does the marketplace repo live, and at what visibility?** github.com
+      `harvard-huit/huit-agent-plugins`, **public** (decided 2026-09-25 by
+      JaZahn). Internal was the original intent, but it would force a
+      SAML-authorized github.com login before `/plugin marketplace add`, and
+      the goal is that anyone can install regardless of `harvard-huit` org
+      access. Basis: a scan of every tracked file and the full commit history
+      found no tokens, keys, or account IDs; the org permits member-created
+      public repos; write access is unchanged by visibility. Known
+      disclosures accepted as non-secret: the GHES hostname (public DNS), the
+      Okta embed link (useless without HarvardKey; mention it to HUIT
+      security), the `admints-dev` example alias and the
+      `*-standard-saml-poweruser-iam-role` naming pattern. Follow-ups: add a
+      license (public with no license is all-rights-reserved), tell the
+      admins before announcing, consider branch protection on `main`, and
+      optionally swap `admints-dev` for a generic placeholder in user-facing
+      files.
 - [x] **Does the local server's OAuth device-code fallback work for GHES?**
       Only with an OAuth App or GitHub App registered on the GHES instance and its
       client ID passed via `GITHUB_OAUTH_CLIENT_ID`; the baked-in app is github.com
@@ -298,13 +315,43 @@ is one source of truth.
 - [x] Probe for installed vs configured: `aws-login -version` and
       `aws-login -show-config` (empty `profile_map` means not configured).
 
+## quiz plugin
+
+Comprehension checks, decided 2026-09-25. The plugin boundary is the *quiz*
+axis, not the *session* axis: a session quiz and a project quiz share the
+question style, the ask mechanics, and the grading (one file,
+`references/quiz-format.md`, referenced from both skills via
+`${CLAUDE_PLUGIN_ROOT}`, which Claude Code substitutes in plugin skill
+content), and the same person wants both. The cost-report skills
+(`session-token-report`, `weekly-cost-report`) share only a data source with
+the quiz, so they stay personal; a separate plugin if anyone asks. Plugin
+name `quiz` was chosen for the invocation (`/quiz:session`, `/quiz:project`);
+"tools" was rejected as a catch-all that invites dumping.
+
+- **Disambiguation rule (JaZahn, 2026-09-25):** a bare "quiz me" means
+  `session`, unless the session is so small nothing was really done, or the
+  session was specifically about the project (exploring or learning it rather
+  than changing it); then `project`. Both descriptions carry the rule, because
+  the description is all Claude sees when choosing a skill. Each skill body
+  also says when to hand off to the other.
+- `session` is the former personal `~/.claude/skills/session-quiz` verbatim,
+  minus the format section (now shared). `spin-down` (personal, not in the
+  marketplace: it encodes JaZahn's memory routing) invokes `quiz:session`
+  first and falls back to `session-quiz`, then to inline questions.
+- `project` reads only. In a large repo it delegates the wide scans to an
+  Explore subagent. It ranks candidates by cost-of-being-wrong: security,
+  conventions with no guardrail, reversed decisions, setup traps.
+- To do: install the plugin from a pushed commit, confirm `/quiz:session` and
+  `/quiz:project` both appear and that the shared reference path resolves,
+  then delete the personal `session-quiz` so there is one copy.
+
 ## Conventions
 
 - Validate before every commit. Each `claude plugin validate <dir>` call checks
   one thing: the marketplace manifest for `.`, a plugin manifest for a plugin
-  dir, and skill frontmatter for a `skills` dir. So run all five:
-  `claude plugin validate .`, `... plugins/huit-github`, `... plugins/huit-aws`,
-  `... plugins/huit-github/skills`, `... plugins/huit-aws/skills`.
+  dir, and skill frontmatter for a `skills` dir. So run all seven:
+  `claude plugin validate .`, then `... plugins/<name>` and
+  `... plugins/<name>/skills` for each of `huit-github`, `huit-aws`, `quiz`.
 - Test locally with `/plugin marketplace add ~/workshop/huit-agent-plugins` then
   `/plugin install <name>@huit-agent-plugins` (or the same via `claude plugin ...`
   on the CLI). Installs copy to `~/.claude/plugins/cache/huit-agent-plugins/<name>/<version>/`;

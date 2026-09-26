@@ -18,6 +18,13 @@
       "description": "Log into HUIT AWS accounts from Claude Code: HarvardKey/Okta SAML via the HUIT aws-login CLI, or a refreshing aws login console-session attach. Skill /huit-aws:aws-login.",
       "category": "productivity",
       "tags": ["aws", "saml", "huit"]
+    },
+    {
+      "name": "quiz",
+      "source": "./plugins/quiz",
+      "description": "Short multiple-choice comprehension checks. /quiz:session asks about what happened in the current session (security-relevant changes, decisions made on your behalf, loose ends); /quiz:project asks about the gotchas of the repo you are in.",
+      "category": "productivity",
+      "tags": ["quiz", "comprehension", "onboarding"]
     }
   ]
 }

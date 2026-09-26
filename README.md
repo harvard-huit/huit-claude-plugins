@@ -7,6 +7,7 @@ both the marketplace and the plugins.
 |---|---|---|
 | `huit-github` | GitHub access for both of our GitHubs **without a Personal Access Token** | `/huit-github:github-setup` |
 | `huit-aws` | Log into HUIT AWS accounts with HarvardKey, from inside Claude Code | `/huit-aws:aws-login <account>` |
+| `quiz` | Multiple-choice comprehension checks on the current session or on the repo's gotchas | `/quiz:session`, `/quiz:project` |
 
 ## Install
 
@@ -18,6 +19,7 @@ Then, inside Claude Code:
 /plugin marketplace add harvard-huit/huit-agent-plugins
 /plugin install huit-github@huit-agent-plugins
 /plugin install huit-aws@huit-agent-plugins
+/plugin install quiz@huit-agent-plugins
 ```
 
 Install whichever you need. You approve every command a skill proposes.
@@ -34,6 +36,7 @@ auto-update on. To update by hand:
 /plugin marketplace update huit-agent-plugins
 /plugin update huit-github@huit-agent-plugins
 /plugin update huit-aws@huit-agent-plugins
+/plugin update quiz@huit-agent-plugins
 /reload-plugins
 ```
 
@@ -117,10 +120,30 @@ in your own terminal, lets the skill run logins without a password prompt.
 
 The skill never reads your credentials files and never prints keys.
 
+## quiz
+
+Three or four multiple-choice questions, answered in Claude Code's select UI,
+graded in a sentence each. The point is not the score; it is finding out what
+you did not know while it is still cheap to look.
+
+| Skill | Asks about | Say |
+|---|---|---|
+| `/quiz:session` | what happened in this session: changes you approved without reading, decisions Claude made for you, security-relevant edits, loose ends | "quiz me", "did I miss anything" |
+| `/quiz:project` | the gotchas of the repo you are in: rules in `CLAUDE.md`, decisions reversed in git history, setup traps, "do not" comments | "quiz me on this repo", "what should I know before I touch this" |
+
+A bare "quiz me" means the session quiz, unless the session was too small to
+have anything in it or was spent learning the project rather than changing it;
+then you get the project quiz. Claude also offers the session quiz on its own
+after a significant change lands. An argument narrows either quiz, e.g.
+`/quiz:session security` or `/quiz:project setup`.
+
+Neither skill changes anything. The project quiz reads files and git history;
+in a large repo it uses a read-only subagent for the scan.
+
 ## Layout
 
 ```
-.claude-plugin/marketplace.json          the marketplace (two plugins)
+.claude-plugin/marketplace.json          the marketplace (three plugins)
 plugins/huit-github/
   .claude-plugin/plugin.json             manifest
   .mcp.json                              github (hosted, headersHelper) + github-huit (wrapper)
@@ -132,6 +155,11 @@ plugins/huit-github/
 plugins/huit-aws/
   .claude-plugin/plugin.json             manifest
   skills/aws-login/SKILL.md              the login walkthrough
+plugins/quiz/
+  .claude-plugin/plugin.json             manifest
+  references/quiz-format.md              question style, asking, grading (shared by both skills)
+  skills/session/SKILL.md                what happened in this session
+  skills/project/SKILL.md                gotchas of the repo you are in
 ```
 
 Validate before committing:
@@ -142,6 +170,8 @@ claude plugin validate plugins/huit-github
 claude plugin validate plugins/huit-github/skills
 claude plugin validate plugins/huit-aws
 claude plugin validate plugins/huit-aws/skills
+claude plugin validate plugins/quiz
+claude plugin validate plugins/quiz/skills
 ```
 
 Bump the plugin's `version` on every change you publish; that field is what
